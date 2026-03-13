@@ -21,11 +21,23 @@ when we request system for more memory .. we tell system to increment brk ans si
 there is one system call named sbrk()
 it helps us handle program break
 sbrk(0) gives u current addr of program break (where the program breaks)
-sbrk(10) -> increment brk by 10 bytes
+sbrk(10) -> increment brk by 10 bytes 
 sbrk(-10) -> decrement brk by 10 bytes
 
 on failure sbrk returns (void*)-1
 
+you might think thats easy .. we can simply call sbrk with the size bytes and boom we got that memory .. but the tricky part is that free(ptr) func frees the memory block pointed to by the ptr .. which must have been returned by the prev func call to malloc or calloc ..
+
+but to free the memory first we need to know the size of memoryblock to be freed .. currently with just srbk(bytesize) ... its not possible to do so since size is not stored anywhere .. so we need to find a way to store size in some way 
+
+also heap memory is contiguos .. so we can only release the memory at the end of the heap .. we cant release a block of memory in the middle ... 
+so from now .. freeing a block of memory does not mean releasing memory back to os .. it just means  we keep the block marked as free .. this block marked as free may be reused later .. since memory in middle cant be released .. 
+
+we can do one thing .. we have two things to store for every block of allocated memory one is size and other is whether its free or not 
+
+so the idea is simple when program req sbrk(size) ... we calculate total size = header size + size and then call sbrk
+
+but we are not sure blocks of memory allocated by our program is continguos or not ... we also need a way to traverse thru our blocks for memory .. just tracking memory allocated .. we will put them in linked list 
 
 
 
