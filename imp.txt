@@ -1,1 +1,33 @@
 hello guys how are you its 00:30:17
+
+first of all lets get familiar with virtual space address 
+in simple words the memory layout or the memory stack whatever you understand or whatever suits you 
+
+now it has 5 sections 
+1. text section: the part that contains the binary instructions to be executed by the processor
+2. data section: it has some non zero initialized static data
+3. bss (block started by symbol): it has zero initialized data.static data uninitialized in program is initialized 0 and goes here 
+4. heap: contains dynamically allocated data
+5. stack: has variables, func args, cpy of base ptr
+
+stack and heap grows in opposite direction .. means they grow towards each other 
+
+data,bss and heap together are known as data segments
+and its end is shown by a system call named brk
+it is a pointer nothing else it is called as program break which as the name suggests means program break
+
+when we request system for more memory .. we tell system to increment brk ans similarly when we tell to free memory we tell system to decrement brk
+
+there is one system call named sbrk()
+it helps us handle program break
+sbrk(0) gives u current addr of program break (where the program breaks)
+sbrk(10) -> increment brk by 10 bytes
+sbrk(-10) -> decrement brk by 10 bytes
+
+on failure sbrk returns (void*)-1
+
+
+
+
+
+
