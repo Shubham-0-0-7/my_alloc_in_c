@@ -10,7 +10,8 @@ now it has 5 sections
 4. heap: contains dynamically allocated data
 5. stack: has variables, func args, cpy of base ptr
 
-stack and heap grows in opposite direction .. means they grow towards each other 
+stack and heap grows in opposite direction .. 
+means they grow towards each other 
 
 data,bss and heap together are known as data segments
 and its end is shown by a system call named brk
@@ -26,20 +27,98 @@ sbrk(-10) -> decrement brk by 10 bytes
 
 on failure sbrk returns (void*)-1
 
-you might think thats easy .. we can simply call sbrk with the size bytes and boom we got that memory .. but the tricky part is that free(ptr) func frees the memory block pointed to by the ptr .. which must have been returned by the prev func call to malloc or calloc ..
+you might think thats easy .. 
+we can simply call sbrk with the size bytes and boom we got that memory .. 
+but the tricky part is that free(ptr) func frees the memory block pointed to by the ptr .. 
+which must have been returned by the prev func call to malloc or calloc ..
 
-but to free the memory first we need to know the size of memoryblock to be freed .. currently with just srbk(bytesize) ... its not possible to do so since size is not stored anywhere .. so we need to find a way to store size in some way 
+but to free the memory first we need to know the size of memoryblock to be freed .. 
+currently with just srbk(bytesize) ... 
+its not possible to do so since size is not stored anywhere .. 
+so we need to find a way to store size in some way 
 
-also heap memory is contiguos .. so we can only release the memory at the end of the heap .. we cant release a block of memory in the middle ... 
-so from now .. freeing a block of memory does not mean releasing memory back to os .. it just means  we keep the block marked as free .. this block marked as free may be reused later .. since memory in middle cant be released .. 
 
-we can do one thing .. we have two things to store for every block of allocated memory one is size and other is whether its free or not 
+also heap memory is contiguos .. 
+so we can only release the memory at the end of the heap .. 
+we cant release a block of memory in the middle ... 
+so from now .. 
+freeing a block of memory does not mean releasing memory back to os .. 
+it just means  we keep the block marked as free .. 
+this block marked as free may be reused later .. 
+since memory in middle cant be released .. 
 
-so the idea is simple when program req sbrk(size) ... we calculate total size = header size + size and then call sbrk
+
+we can do one thing .. 
+we have two things to store for every block of allocated memory one is size and other is whether its free or not 
+
+so the idea is simple when program req sbrk(size) ... 
+we calculate total size = header size + size and then call sbrk
 
 but we are not sure blocks of memory allocated by our program is continguos or not ... we also need a way to traverse thru our blocks for memory .. just tracking memory allocated .. we will put them in linked list 
 
+so one problem was there to be addressed .. that is .. 
+what if two threads calls the malloc at the exact same time
+both the threads found the same free block  ... 
+now both will think they own the same memory .. this is data race
+
+now linked list's metadata is corrupted .. 
+even if this wont give error initially or wont crash immediately .. 
+it silently corrupts state and will crash somewhere hours later
+and its very dangerous in system programming
+
+so there is concept of locking .. acquiring a lock and stuff like that 
+so the lock is protecting the allocator's internal data structure: 
+1. the linked list of block, 
+2. its free/used metadata and 
+3 .the heap boundary
 
 
+basically it says only one thread can walk and modify this list at a time
+"acquiring the lock" before get_free_block() means: 
+i am the only one allowed to touch this linked list right now
+well what i can think at the a common sense level is that see .. 
+if there is problem that if acquiring a lock means 
+only one thread can write to the same free memory block ..
+lets say we have 16 threads right .. so 1 is in use
+and other 15 are waiting then what we can do is ... 
+so we will make 16 blocks or rooms you say where the threads can access 
+the memory then it wont happen like one thread is overlapping the other 
+since we gave a particular and certain space for them ...
+like idk how to implement such ... even i dont know its correct or not but lets proceed 
 
+now we got the rooms as per say 
+or arenas we will use the word arenas .. so now 16 threads, 16 arenas 
+now another problem ... lets say there is fixed size of the block as well as arena okay ..
+suppose you allocated a 1000 byte block. Program uses it, then frees it. 
+Now you have a free block of 1000 bytes.
+next allocation requests 10 bytes. 
+your get_free_block() finds that 1000 byte block and returns it.
+you just gave 1000 bytes for a 10 byte request. 
+990 bytes are wasted inside that block forever ... until it gets freed again. 
+This is called internal fragmentation.
+What's the fix? When you find a free block that's significantly larger than requested ... 
+what should you do with the leftover space?
+
+[header | 1000 bytes of user data ]
+[header | 1000 bytes, is_free = 1 ]
+[header | 10 bytes used, 990 dead ]
+
+but what if ... 
+what if instead of handing out the entire 1000 byte block for a 10 byte request, 
+you split it into two blocks right there in memory?
+
+[header | 10 bytes] [header | 990 bytes, is_free=1]
+two separate blocks. 
+first one goes to the caller. 
+second one stays in your free list, available for future allocations.
+this is called splitting. 
+
+now if you used 995 and only 5 bytes are left ... would you still split?
+what is the minimum leftover region? 
+the minimum leftover region should be 
+1. the sizeof(header_t) bytes
+2. at least some usuable space after it
+
+So the minimum leftover size that makes splitting worthwhile is 
+sizeof(header_t) + some_minimum_useful_bytes
 
