@@ -122,3 +122,35 @@ the minimum leftover region should be
 So the minimum leftover size that makes splitting worthwhile is 
 sizeof(header_t) + some_minimum_useful_bytes
 
+now you decided to split ... now where does the remaining header goes?
+now look at the memory layout: X is the addr of header struct and that is 
+sizeof(header_t) bytes lets call it H
+
+
+X                    X+H                        X+H+1000
+[   header (H bytes)][   1000 bytes user space          ]
+
+now user req 10 bytes ... so before split the layout is 
+[header, size = 1000][1000 bytes user space]
+
+after split the layout becomes
+[header, size=10][10 bytes] [header, size=990][990 bytes]
+
+its like 990 user space gets it own header .. 
+so whenever you split a block ... lets say 
+
+there is:
+head->[A]->[B]->[C]->tail
+
+now you want to split B into b1 and b2 because you requested b1 bytes
+so it will be 
+head->[A]->[b1]->[b2]->[C]->tail
+
+now there will be one problem .. whenever you free b1 
+now if i free block b1 now there is problem... yessss you are telling right ... 
+now there are 2 blocks of different size like 10 and 990 ... 
+now if request memory is 11 bytes we have to give from a larger block and ultimately we need to split that also ... 
+even if we have a block with a size closer to 11 that is 10 
+
+so what i can think of is that .. what if we merge them back block b1 and b2
+again merging them to B ... that is known as coalescing 
