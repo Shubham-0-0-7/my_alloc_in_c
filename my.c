@@ -8,6 +8,7 @@ typedef struct header{
   size_t size;
   unsigned is_free;
   struct header* next;
+  struct header* prev;
 } __attribute__((aligned(16))) header_t;
 
 header_t* head = NULL;
@@ -29,6 +30,18 @@ void my_free(void* ptr){
   pthread_mutex_lock(&global_malloc_lock);
   header = (header_t*)ptr - 1;
   header->is_free = 1;
+
+  while(header->next && header->next->is_free){
+    char* block_a_end = (char*)header+sizeof(header)+header->size;
+    if(block_a_end == (char*)header->next){
+      header_t* block_b = header->next; 
+      header->size += sizeof(header_t)+block_b->size;
+      header->next = block_b->next;
+
+      if(tail== block_b) tail = header;
+      else break;
+    }
+  }
   pthread_mutex_unlock(&global_malloc_lock);
 }
 
