@@ -154,3 +154,70 @@ even if we have a block with a size closer to 11 that is 10
 
 so what i can think of is that .. what if we merge them back block b1 and b2
 again merging them to B ... that is known as coalescing 
+
+we right now thats the problem that we are not colescing the blocks if we get two free side by side
+and my get free block will return null right now that means he didnt found 180 bytes or greater block 
+
+okay so another problem is that 8 threads but only 1 is bein used and other 7 are in blocked state 
+so what happens in this condition is that it performance often 
+decrease instead of increasing because of the wait ... 
+if work is getting done with one thread .. then after getting the work done ..
+  it has to wait for rest 7 to get unblock sort of like that 
+ig this is the throughput cost  .. again solution can be give one arena to each thread .. and we will use one thread local ptr to point to the each thread in its arena
+
+
+
+let's say starting addr = 0
+let header = h bytes 
+let block size = 100 bytes
+now first block is starting addr=0 and ending addr = h+99 
+,,, and next block adjacent to it .. its starting addr = h+100 
+and ending addr = h+100-1+h+100-1 that is 2h+198
+(char*)blockA + sizeof(header_t) + blockA->size == (char*)blockB
+
+
+also there is one ques 
+When thread 1 allocates a block and then thread 2 frees it... what happens? 
+That block lives in thread 1's arena. Thread 2 doesn't own that arena.
+This is called a cross-thread free. It's not a rare edge case — it's extremely common in real programs. 
+a producer thread allocates, a consumer thread frees.
+so now how do we handle that? What breaks if you just ignore it?
+
+and yeah tbh i thought of that thing .. thread 1 allocates and thread 2 frees .. 
+then thread b must return to thread a arena .. so we can handle that by making the threads lock free .. 
+i mean they can drop off returned memory using atomic instruction... 
+
+now what is this atomic thing? what are atomic instructions ? 
+let me actually help you understand what that atomic stuff is 
+
+say your lock free return stack has head pointing to some block ...
+thread 1 and thread 2 both want to push onto it simultaneously ..
+Both read head. Both compute new_node->next = head. Both try to write head = new_node. 
+One of them wins. The other one's write clobbers the first..... you just lost a node .. thats a data race.
+so the fix is compare and swap (CAS) .. the idea is:
+"set head to new_node, BUT ONLY IF head is still the value I read earlier. If someone changed it in between, my operation fails and I retry."
+
+its one atomic hardware instruction .. either it succeeds fully 
+or it fails ...no partial state ...this is how you build a lock-free stack. 
+Push = CAS loop. Pop = CAS loop.
+now you might be thinking like ...
+why a stack and not a queue?
+you think of yourself .. when in stack you just need to synchronize only head ptr 
+but if you use queue you have to synchronize two ptrs that is head and tail ..
+and it adds up to unnecessary complexity .. because 
+ because here order doesnt matter... we just need any free block
+
+now think of this 
+you have 8 threads ...every free hits the global lock ..thats potentially thousands of lock acquisitions per second. 
+versus ...each thread batches up say 10 freed blocks locally, then acquires the global lock once to dump all 10.
+How many times does the global lock get acquired in each scenario if each thread frees 1000 blocks? Copyright (c) 
+work out the numbers. What does that tell you about contention?
+
+without batches ... lock acq per thread = 1000 now if 8 threads then 8x1000 = 8000 
+chances of two threads hitting is very high .. and compare and swap will happen 8000 timesbut 
+but 
+when batches are there .. lock acq per thread = 100 .. then 8x100=800 .. 
+now its more efficient so CAS will happen only 800 thats 10% of 800 .. 
+so lock contention decreased by 90%
+
+
