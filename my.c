@@ -4,6 +4,8 @@
 #include <pthread.h>
 #include <stdalign.h>
 
+#define MIN_SPLIT_SIZE 16
+
 typedef struct header{
   size_t size;
   unsigned is_free;
@@ -74,7 +76,7 @@ void* my_alloc(size_t size){
   header = get_free_block(size);
 
   if(header){
-    if(header->size >= size + sizeof(header_t)){
+    if(header->size >= size + sizeof(header_t)+MIN_SPLIT_SIZE){
       header_t* new_header = (header_t*)((char*)(header+1)+size);
       new_header->size = header->size - size - sizeof(header_t);
       new_header->is_free = 1;
