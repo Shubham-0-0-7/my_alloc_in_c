@@ -31,15 +31,27 @@ void my_free(void* ptr){
   header = (header_t*)ptr - 1;
   header->is_free = 1;
 
-  while(header->next && header->next->is_free){
+  if(header->next && header->next->is_free){
     char* block_a_end = (char*)header+sizeof(header)+header->size;
     if(block_a_end == (char*)header->next){
       header_t* block_b = header->next; 
       header->size += sizeof(header_t)+block_b->size;
       header->next = block_b->next;
 
+      if(header->next) header->next->prev = header;
+
       if(tail== block_b) tail = header;
-      else break;
+    }
+  }
+  if(header->prev && header->prev->is_free){
+    header_t* prev_block = header->prev;
+    char* prev_block_end = (char*)prev_block + sizeof(header_t)+prev_block->size;
+    if(prev_block_end == (char*)header){
+      prev_block->size += sizeof(header_t)+header->size;
+      prev_block->next = header->next;
+
+      if(prev_block->next) prev_block->next->prev = prev_block;
+      if(tail==header) tail = prev_block;
     }
   }
   pthread_mutex_unlock(&global_malloc_lock);
@@ -67,6 +79,9 @@ void* my_alloc(size_t size){
       new_header->size = header->size - size - sizeof(header_t);
       new_header->is_free = 1;
       new_header->next = header->next;
+      new_header->prev = header;
+
+      if(new_header->next) new_header->next->prev = new_header;
 
       header->size = size;
       header->next = new_header;
@@ -87,6 +102,7 @@ void* my_alloc(size_t size){
   header->size = size;
   header->is_free = 0;
   header->next = NULL;
+  header->prev = tail;
 
   if(!head) head = header;
   if(tail) tail->next = header;
@@ -102,7 +118,7 @@ void printmemlist(){
     printf("current memory state\n");
     int block_num =1;
     while(curr){
-        printf("block %d: addr = %p \n size = %zu bytes \n is_free = %d \n next = %p\n", 
+        printf("block %d: addr = %p \nsize = %zu bytes \nis_free = %d \nnext = %p\n", 
             block_num, 
             (void*)curr, 
             curr->size, 
@@ -112,7 +128,7 @@ void printmemlist(){
         curr = curr->next;
         block_num++;
   }
-  printf("cshdabcjhdjdvchj\n");
+  printf("\t\n");
 }
 
 int main(void){
