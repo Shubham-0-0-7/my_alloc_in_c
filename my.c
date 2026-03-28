@@ -3,6 +3,8 @@
 #include <stddef.h>
 #include <pthread.h>
 #include <stdalign.h>
+#include <string.h>
+#include <stdint.h>
 
 #define MIN_SPLIT_SIZE 16
 
@@ -113,6 +115,32 @@ void* my_alloc(size_t size){
   pthread_mutex_unlock(&global_malloc_lock);
   return (void *)(header+1);
 
+}
+
+void* my_realloc(void* ptr, size_t new_size){
+  if(!ptr) return my_alloc(new_size);
+  if(new_size == 0){
+    my_free(ptr);
+    return NULL;
+  }
+  header_t* header = (header_t*)ptr-1;
+  if(header->size >= new_size) return ptr; //little optimization 
+
+  void* new_ptr = my_alloc(new_size);
+  if(new_ptr ==NULL) return NULL;
+  memcpy(new_ptr, ptr, header->size);
+  my_free(ptr);
+  return new_ptr;
+}
+
+void* my_calloc(size_t num, size_t size){
+  if(num==0 || size==0) return NULL;
+  if(num > SIZE_MAX/size) return NULL;
+  //because if we did num*size > size_max then it will overflow before evaluating
+  size_t totalsize = num*size;
+  void* ptr = my_alloc(totalsize);
+  if(ptr) memset(ptr, 0, totalsize);
+  return ptr;
 }
 
 void printmemlist(){
