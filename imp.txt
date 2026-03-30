@@ -220,4 +220,51 @@ when batches are there .. lock acq per thread = 100 .. then 8x100=800 ..
 now its more efficient so CAS will happen only 800 thats 10% of 800 .. 
 so lock contention decreased by 90%
 
-
+so now that we have implemented the basic malloc using merging and splitting
+mechanism .. we will try to make our malloc faster than the actual malloc in one domain ... that is we will implement slab allocation ... like the one used in linux kernel and databases .. 
+
+you might not be knowing some terminolgies so first let me clear that 
+
+page:
+This is a hardware/OS concept. The OS doesn't give memory to programs in 
+arbitrary bytes ... it manages memory in fixed chunks called pages. 
+On basically every modern system a page is 4096 bytes (4KB). 
+When your program needs more memory, the OS hands it one or more pages. 
+sbrk and mmap both ultimately deal in pages under the hood. 
+You don't choose this size ... the hardware dictates it.
+Think of a page as a plot of land the OS rents to you.
+
+Slab:
+A slab is one contiguous chunk of memory ... typically one or a few pages ..
+that is dedicated entirely to objects of one specific size. 
+you take that 4KB page, decide "this slab holds 64-byte objects", 
+and carve it up. Nothing else lives in this slab. No mixed sizes. 
+One slab, one object size, forever.
+The word "slab" comes from the Linux kernel allocator paper by Jeff Bonwick (1994). Worth reading someday ... it's one of the most influential systems papers ever written.
+
+Pool:
+A pool is the collection of all slabs for a given size class. 
+So you might have a "64-byte pool" which contains three slabs ... 
+three 4KB pages ...each carved into 64-byte slots. When one slab fills up, 
+the pool gets another slab. The pool is the manager. The slab is the raw memory it manages.
+
+Slot:
+A slot is one individual unit inside a slab. If your slab is 4KB and your object size is 64 bytes, you have 64 slots. 
+A slot is either occupied (handed to the caller) or free (available to give out). That's it.
+
+so the mental picture is:
+POOL (manages all memory for size 64)
+├── SLAB 1 (4KB page, carved into 64 slots of 64 bytes each)
+│     ├── slot 0  [occupied]
+│     ├── slot 1  [free]
+│     ├── slot 2  [occupied]
+│     └── ...
+├── SLAB 2 (4KB page, all 64 slots occupied — full slab)
+└── SLAB 3 (4KB page, just allocated — all slots free)
+
+You have one pool per size class. So if you support 16, 32, 64, 128, 256 byte objects ...
+you have 5 pools, each managing its own slabs.
+
+
+
+
