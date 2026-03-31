@@ -3,6 +3,7 @@
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include "slab.h"
 
 slab_t* slab_create(size_t obj_size){
@@ -56,6 +57,44 @@ void slab_free(slab_t* slab, void* ptr){
   slab->free_list = freed_slot;
   slab->num_free++;
 }
+
+pool_t* pool_create(size_t obj_size){
+  pool_t* pool = mmap(
+      NULL,
+      sizeof(pool_t),
+      PROT_READ | PROT_WRITE, 
+      MAP_ANONYMOUS | MAP_PRIVATE,
+      -1, 0);
+
+  if(pool==MAP_FAILED) return NULL;
+  pool->obj_size=obj_size;
+  pool->partial = NULL;
+  return pool;
+}
+
+void* pool_alloc(pool_t* pool){
+  if(pool==NULL) return NULL;
+  slab_t* curr = pool->partial;
+  while(curr!=NULL){
+    if(curr->num_free > 0) return slab_alloc(curr);
+    curr=curr->next;
+  }
+  
+  slab_t* new_slab = slab_create(pool->obj_size);
+  if(new_slab==NULL) return NULL;
+  new_slab->next = pool->partial;
+  pool->partial=new_slab;
+
+  return slab_alloc(new_slab);
+}
+
+void pool_free(pool_t* pool, void* ptr){
+  if(pool==NULL || ptr==NULL) return;
+  uintptr_t page_start = (uintptr_t)ptr & ~((uintptr_t)PAGE_SIZE-1);
+  slab_t* slab = (slab_t*)page_start;
+  slab_free(slab, ptr);
+}
+
 
 int main(){
   slab_t* my_slab = slab_create(64);
