@@ -57,7 +57,7 @@ void slab_free(slab_t* slab, void* ptr){
   slab->num_free++;
 }
 
-int main() {
+int main(){
   slab_t* my_slab = slab_create(64);
   if(my_slab != NULL) printf("created a slab with %zu free slots.\n", my_slab->num_free);
   else printf("slab creation failed\n");
